@@ -1,83 +1,125 @@
-#include"stdio.h"    
-#include"stdlib.h"    
-#include"sys/types.h"    
-#include"sys/socket.h"    
-#include"string.h"    
-#include"netinet/in.h"    
-#include"netdb.h"  
-#include"pthread.h"  
-#include "wrsock.h"    
-#define BUF_SIZE 2000   
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <errno.h>
 
-// Fonction recevoir le message du serveur 
-//****************************************
-void * receiveMessage(void * socket) {  
- int sockfd, ret;  
- char buffer[BUF_SIZE];   
- sockfd = (int) socket;  
- memset(buffer, 0, BUF_SIZE);    
- for (;;) {  
-  ret = recvfrom(sockfd, buffer, BUF_SIZE, 0, NULL, NULL);    
-  if (ret < 0) {    
-   printf("Error receiving data!\n");      
-  } else {  
-   printf("server: ");  
-   fputs(buffer, stdout);  
-    }    
- }  
-}  
+int main(int argc, char *argv[]) { 
+struct hostent *server;
+struct sockaddr_in serv_addr/*, cli_addr*/;
 
-// Debut du program Chat
-//**********************
-int main(int argc, char**argv) {    
- struct sockaddr_in *addr, cl_addr;   
- int sockfd, ret;    
- char buffer[BUF_SIZE];   
- int port;  
- pthread_t rThread;  
-  
- if (argc < 3) {  
-  printf("Utilisation: ./client <non du serveur> <numero port>\n");  
-  exit(1);    
- }  
-// Creation du socket  
-//*******************
- sockfd = socket(AF_INET, SOCK_STREAM, 0);    
- if (sockfd < 0) {    
-  printf("Error de creation du socket!\n");    
-  exit(1);    
- }    
- printf("Socket cree...\n");     
-// creation de l address du socket
-//********************************
-  port = atoi(argv[2]);
-  memset(&addr, 0, sizeof(addr));
- addr = (struct sockaddr_in *) CreerSockAddr (argv[1], port);   
-//Connection au serveur
-//*********************
- ret = connect(sockfd, (struct sockaddr *) &addr, sizeof(addr));    
-  printf("Connecte au serveur...\n");    
-  
- memset(buffer, 0, BUF_SIZE);  
- printf("Tapez votre message!\n");  
-  
- //la création d'un nouveau thread pour recevoir des messages à partir du serveur.
- //*******************************************************************************
- ret = pthread_create(&rThread, NULL, receiveMessage, (void *) sockfd);  
- if (ret) {  
-  printf("ERROR: RCode de retour à partir de pthread_create()  %d\n", ret);  
-  exit(1);  
- }  
-  
- while (fgets(buffer, BUF_SIZE, stdin) != NULL) {  
-  ret = sendto(sockfd, buffer, BUF_SIZE, 0, (struct sockaddr *) &addr, sizeof(addr));    
-  if (ret < 0) {    
-   printf("Error sending data!\n\t-%s", buffer);    
-  }  
- }  
-  
- close(sockfd);  
- pthread_exit(NULL);  
-   
- return 0;      
-}    
+ if((argc < 3) || (argc > 4)) {
+ fprintf(stderr, "Ussage: %s + IP Address + port No. Append a 1 to turn verbose on.\n", argv[0]);
+ exit(EXIT_FAILURE);
+ }
+
+int debug;
+ if(argc == 4) {
+ debug = atoi(argv[3]);
+ }
+
+
+int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+ if(sockfd < 0) {
+ printf("SOCKET(-1) error ---> %s.\n", strerror(errno));
+ exit(EXIT_FAILURE);
+ }
+
+ if((sockfd == 0) && (debug == 1)) {
+ printf("SOCKET(0) error ---> %s.\n", strerror(errno));
+ }
+
+ if((sockfd) && (debug == 1)) {
+ printf("DEBUG MSG --> SOCKET was successful.\n");
+ }
+
+// Enables you to reuse the address your binded to.
+int yes = 1;
+setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+
+bzero((char *) &serv_addr, sizeof(serv_addr));
+server = gethostbyname(argv[1]);
+ if(server == NULL) {
+ fprintf(stderr, "No such host.\n");
+ printf("%s\n", strerror(errno));
+ exit(EXIT_FAILURE);
+ }
+
+  else if((server) && (debug == 1)) {
+  printf("DEBUG MSG - Successfully got host by name.\n");
+  }
+
+// Even though you enter an integer on the CL. It is passed as a string. ATOI(ascii to integer) will convert the string to int.
+int portno = atoi(argv[2]);
+ if(portno < 0) {
+ printf("PORTNO(0) error ---> %s.\n", strerror(errno));
+ }
+
+ if((portno == 0) && (debug == 1)) {
+ printf("DEBUG MSG - ATOI(0) error ---> %s.\n", strerror(errno));
+ }
+
+ if((portno) && (debug == 1)) {
+ printf("Successfully binded to port %d.\n", portno);
+ }
+
+serv_addr.sin_family = AF_INET;
+memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length);
+serv_addr.sin_port = htons(portno);
+
+int connector = connect(sockfd, (const struct sockaddr *)&serv_addr, sizeof(serv_addr));
+ if(connector < 0) {
+ fprintf(stderr, "%s. CONNECT()\n", strerror(errno));
+ exit(EXIT_FAILURE);
+ }
+
+  else {
+  printf("Made a connection to %s\n", inet_ntoa(serv_addr.sin_addr));
+  }
+
+for( ; ; )
+{
+char buffer[4096];
+
+printf("Message: ");
+fgets(buffer, sizeof(buffer), stdin);
+ssize_t bytes_written = write(sockfd, buffer, strlen(buffer));
+ if(bytes_written < 0) {
+ printf("WRITE(-1) error ---> %s.\n", strerror(errno));
+ }
+
+ if(bytes_written == 0) {
+ //printf("WRITE(0) error ---> %s.\n", strerror(errno));
+ printf("Nothing was written.\n");
+ }
+
+ if((bytes_written) && (debug == 1)) {
+ printf("DEBUG MSG - WRITE was successful.\n");
+ }
+
+ssize_t bytes_read = read(sockfd, buffer, sizeof(buffer));
+ if(bytes_read < 0) {
+        //fprintf(stderr, "Error reading message from %s\n", inet_ntoa(cli_addr.sin_addr));
+        printf("READ(-1) error ---> %s.\n", strerror(errno));
+        exit(EXIT_FAILURE);
+        }
+
+ //Test to see if the buffer is blank.
+        if((bytes_read == 0) && (debug == 1)) {
+        printf("READ(0) error ---> %s.\n", strerror(errno));
+        }
+  else {
+  printf("server: %s", buffer);
+  }
+
+}
+
+close(sockfd);
+
+return 0;
+}

@@ -1,95 +1,160 @@
-#include"stdio.h"  
-#include"stdlib.h"  
-#include"sys/types.h"  
-#include"sys/socket.h"  
-#include"string.h"  
-#include"netinet/in.h"  
-#include"pthread.h"  
-#define PORT 4444  
-#define BUF_SIZE 2000  
-#define CLADDR_LEN 100  
- 
-//Fonction reception du message du client 
-//***************************************
-void * receiveMessage(void * socket) {  
- int sockfd, ret;  
- char buffer[BUF_SIZE];   
- sockfd = (int) socket;  
- memset(buffer, 0, BUF_SIZE);    
- for (;;) {  
-  ret = recvfrom(sockfd, buffer, BUF_SIZE, 0, NULL, NULL);    
-  if (ret < 0) {    
-   printf("Erreur de reception de donnees!\n");      
-  } else {  
-   printf("Client: ");  
-   fputs(buffer, stdout);  
-   //printf("\n");  
-  }    
- }  
-}  
-//Debut program serveur
-//********************
-void main() {  
- struct sockaddr_in addr, cl_addr;  
- int sockfd, len, ret, newsockfd;  
- char buffer[BUF_SIZE];  
- pid_t childpid;  
- char clientAddr[CLADDR_LEN];  
- pthread_t rThread;  
- // Creation du socket  
- //
- sockfd = socket(AF_INET, SOCK_STREAM, 0);  
- if (sockfd < 0) {  
-  printf("Erreur de creation de socket!\n");  
-  exit(1);  
- }  
- printf("Socket cree...\n");  
-   
- memset(&addr, 0, sizeof(addr));  
- addr.sin_family = AF_INET;  
- addr.sin_addr.s_addr = INADDR_ANY;  
- addr.sin_port = PORT;  
-// Binf du socket
-//***************
- ret = bind(sockfd, (struct sockaddr *) &addr, sizeof(addr));  
- if (ret < 0) {  
-  printf("Error binding!\n");  
-  exit(1);  
- }  
- printf("Binding done...\n");  
-  
- printf("Waiting for a connection...\n");  
- listen(sockfd, 5);  
- len = sizeof(cl_addr);  
- newsockfd = accept(sockfd, (struct sockaddr *) &cl_addr, &len);  
- if (newsockfd < 0) {  
-  printf("Erreur connexion!\n");  
-  exit(1);  
- }   
- inet_ntop(AF_INET, &(cl_addr.sin_addr), clientAddr, CLADDR_LEN);  
- printf("Connexion accepte de %s...\n", clientAddr);   
- memset(buffer, 0, BUF_SIZE);  
- printf("Entrez vos messages un par un et appuyez sur enter!\n");  
-  
- //la creation d un nouveau thread pour recevoir des messages a partir du client.
- //******************************************************************************
- ret = pthread_create(&rThread, NULL, receiveMessage, (void *) newsockfd);  
- if (ret) {  
-  printf("ERROR: Code de retour a partir de pthread_create() is %d\n", ret);  
-  exit(1);  
- }  
-  
- while (fgets(buffer, BUF_SIZE, stdin) != NULL) {  
-  ret = sendto(newsockfd, buffer, BUF_SIZE, 0, (struct sockaddr *) &cl_addr, len);    
-  if (ret < 0) {    
-   printf("Erreur d envoi de donnees!\n");    
-   exit(1);  
-  }  
- }     
-   
- close(newsockfd);  
- close(sockfd);  
-  
- pthread_exit(NULL);  
- return;  
-}  
+#include <string.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netdb.h>
+
+int main(int argc, char *argv[]) {
+struct sockaddr_in serv_addr, cli_addr;
+struct hostent *server;
+
+ if((argc < 3) || (argc > 4)) {
+ printf("USAGE: %s + IP Addr + Portno.\n", argv[0]);
+ exit(EXIT_FAILURE);
+ }
+
+int debug;
+ if(argc == 4) {
+ debug = atoi(argv[3]);
+ }
+
+int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+ if(sockfd < 0) {
+ printf("SOCKET(-1) error --> %s.\n", strerror(errno));
+ exit(EXIT_FAILURE);
+ }
+
+ if((sockfd == 0) && (debug == 1)) {
+ printf("SOCKET(0) - DEBUG MSG --> %s.\n", strerror(errno));
+ }
+
+  else if(sockfd) {
+    do {
+     {
+     printf("Waiting for a connection...\n");
+     }
+    } while(!accept);
+  }
+
+int yes = 1;
+setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+
+server = gethostbyname(argv[1]);
+ if(server == NULL) {
+ printf("GETHOSTBYNAME(NULL) error --> %s.\n", strerror(errno));
+ exit(EXIT_FAILURE);
+ }
+
+ if((server != NULL) && (debug == 1)) {
+ printf("Sucsessfully got host by name.\n");
+ }
+
+int portno = atoi(argv[2]);
+        if(portno < 0) {
+        printf("ATOI(-1) error --> %s.\n", strerror(errno));
+        exit(EXIT_FAILURE);
+        }
+
+ if((portno == 0) && (debug == 1)) {
+ printf("ATOI(0) - DEBUG MSG --> %s.\n", strerror(errno));
+ }
+
+ if((portno) && (debug == 1)) {
+ printf("ATOI(1) - DEBUG MSG --> %s.\n", strerror(errno));
+ }
+
+bzero((char *)&serv_addr, sizeof(serv_addr));
+serv_addr.sin_family = AF_INET;
+memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length);
+serv_addr.sin_port = htons(portno);
+int binder = bind(sockfd, (const struct sockaddr *)&serv_addr, sizeof(serv_addr));
+ if(binder < 0) {
+ printf("BIND(-1) error --> %s.\n", strerror(errno));
+ exit(EXIT_FAILURE);
+ }
+
+        if((binder == 0) && (debug == 1)) {
+        printf("BIND(0) - DEBUG MSG --> %s.\n", strerror(errno));
+        }
+
+        if((binder) && (debug == 1)) {
+        printf("BIND(1) - DEBUG MSG --> %s.\n", strerror(errno));
+        }
+
+int listener = listen(sockfd, 20);
+ if(listener < 0) {
+ printf("LISTEN(-1) error --> %s.\n", strerror(errno));
+ exit(EXIT_FAILURE);
+ }
+
+        if((listener == 0) && (debug == 1)) {
+        printf("LISTEN(0) - DEBUG MSG --> %s.\n", strerror(errno));
+ }
+
+        if((listener) && (debug == 1)) {
+        printf("LISTEN(1) - DEBUG MSG --> %s.\n", strerror(errno));
+        }
+
+socklen_t clilen;
+clilen = sizeof(cli_addr);
+
+int newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
+ if(newsockfd < 0) {
+ printf("ACCEPT(-1) error --> %s.\n", strerror(errno));
+ exit(EXIT_FAILURE);
+ }
+
+ if((newsockfd == 0) && (debug == 1)) {
+ printf("ACCEPT(0) - DEBUG MSG --> %s.\n", strerror(errno));
+ }
+
+ if((newsockfd) && (debug == 1)) {
+ printf("ACCEPTED new connection.\n");
+ }
+
+for(;;) {
+char buffer[4096];
+
+ssize_t bytes_read = recv(newsockfd, buffer, sizeof(buffer), 0);
+ if(bytes_read < 0) {
+ printf("RECV(-1) error --> %s.\n", strerror(errno));
+ exit(EXIT_FAILURE);
+ }
+
+ if((bytes_read == 0) && (debug == 1)) {
+ printf("Connection closed.\n");
+ }
+
+ if((bytes_read) && (debug == 1)) {
+ printf("RECV was successful.\n");
+ }
+
+ printf("Client: %s", buffer);
+
+const char message[] = "Message recieved.\n";
+ssize_t bytes_written = send(newsockfd, message, strlen(message), 0);
+ if(bytes_written < 0) {
+ printf("SEND(-1) error --> %s.\n", strerror(errno));
+ exit(EXIT_FAILURE);
+ }
+
+        if((bytes_written == 0) && (debug == 1)) {
+        printf("SEND(0) - DEBUG MSG --> %s.\n", strerror(errno));
+ }
+
+        if((bytes_written) && (debug == 1)) {
+        printf("SEND(1) - Message sent.\n");
+        }
+
+}
+
+close(sockfd);
+close(newsockfd);
+
+return 0;
+}
